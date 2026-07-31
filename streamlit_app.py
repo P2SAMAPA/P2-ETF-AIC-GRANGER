@@ -6,7 +6,7 @@ from datetime import date, timedelta
 import config
 import os
 
-st.set_page_config(page_title="TDA-Replay Engine", layout="wide")
+st.set_page_config(page_title="AIC-Granger Engine", layout="wide")
 
 st.markdown("""
 <style>
@@ -29,16 +29,14 @@ st.markdown("""
             font-weight:700;color:white}
 .badge-hold{background:#f39c12;border-radius:6px;padding:2px 12px;font-size:0.75rem;
             font-weight:700;color:white}
-.tda-badge{background:#8e44ad;border-radius:6px;padding:2px 8px;font-size:0.65rem;
-           font-weight:700;color:white}
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<div class="main-header">🧠 TDA-Replay Engine</div>',
+st.markdown('<div class="main-header">🧠 AIC-Granger Engine</div>',
             unsafe_allow_html=True)
 st.markdown(
-    '<div class="sub-header">Continual Rehearsal · Topological Data Analysis · '
-    'Synthetic Scenario Generation · Catastrophic Forgetting Prevention</div>',
+    '<div class="sub-header">Algorithmic Information Flow · Non-Parametric Causality · '
+    'Kolmogorov Complexity · NCD-based Granger Causality</div>',
     unsafe_allow_html=True)
 
 HF_TOKEN = config.HF_TOKEN or os.environ.get("HF_TOKEN", "")
@@ -118,16 +116,12 @@ def load_json_from_hf(path):
 
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
-st.sidebar.markdown("## 🧠 TDA-Replay")
+st.sidebar.markdown("## 🧠 AIC-Granger")
 st.sidebar.markdown(f"**Next Trading Day**")
 st.sidebar.markdown(f"`{next_trading_day()}`")
-st.sidebar.markdown(f"**TDA Max Dim:** {config.TDA['max_dimension']}")
-st.sidebar.markdown(f"**Diffusion Steps:** {config.DIFFUSION['n_steps']}")
-st.sidebar.markdown(f"**Scenarios per Regime:** {config.DIFFUSION['n_samples']}")
-st.sidebar.markdown("---")
-st.sidebar.markdown("**Regimes:**")
-for regime in config.DIFFUSION['regime_labels'][:4]:
-    st.sidebar.markdown(f"  • {regime}")
+st.sidebar.markdown(f"**Compression Method:** {config.COMPRESSION['method']}")
+st.sidebar.markdown(f"**Lag:** {config.CAUSALITY['lag']}")
+st.sidebar.markdown(f"**Significance Level:** {config.CAUSALITY['significance_level']}")
 st.sidebar.markdown("---")
 st.sidebar.markdown("**Macro signals:**")
 for col, desc, w, sign in config.MACRO_SIGNALS:
@@ -140,8 +134,8 @@ if not files:
     st.error("No results found. Run trainer.py first.")
     st.stop()
 
-tab1_path = find_latest(files, "tda_replay_")
-tab2_path = find_latest(files, "tda_replay_breakdown_")
+tab1_path = find_latest(files, "aic_granger_")
+tab2_path = find_latest(files, "aic_granger_breakdown_")
 
 if not tab1_path:
     st.error("No results found. Run trainer.py first.")
@@ -174,24 +168,23 @@ ntd = next_trading_day()
 # TAB 1 - BEST WINDOW PER ETF
 # ══════════════════════════════════════════════════════════════════════════════
 with tab1:
-    st.header("🏆 Best Window per ETF — TDA Scenario Rehearsal Score")
+    st.header("🏆 Best Window per ETF — AIC-Granger Causality Score")
 
-    with st.expander("📖 How TDA-Replay Works", expanded=True):
+    with st.expander("📖 How AIC-Granger Works", expanded=True):
         st.markdown("""
-**TDA-Replay Engine** prevents catastrophic forgetting by generating synthetic scenarios:
+**AIC-Granger Engine** uses Kolmogorov complexity to detect non-linear causality:
 
 | Step | What happens |
 |------|-------------|
-| 1. Extract topology | Use TDA to compute persistence diagrams from market data |
-| 2. Identify regimes | Detect topological signatures (H0 components, H1 loops) |
-| 3. Generate scenarios | Topo-Score-Diffusion creates synthetic paths for each regime |
-| 4. Rehearsal | Model rehearses on unlimited synthetic data |
-| 5. Score | Higher z-score = better scenario quality for rehearsal |
+| 1. Encode returns | Convert time series to strings with finite precision |
+| 2. Compress | Use LZ77/LZMA/zlib as universal feature extractor |
+| 3. NCD | Compute Normalized Compression Distance |
+| 4. Causality | If Y's past compresses X's present, Y causes X |
+| 5. Significance | Permutation test for statistical significance |
 
 **Interpretation:**
-- **Higher z-score** → ETF has good synthetic scenarios for rehearsal
-- **Sharpe ratio** → Quality of generated scenarios
-- **N Scenarios** → Number of synthetic scenarios generated
+- **Higher z-score** → ETF is a causal driver (incoming causality)
+- **Net Causality** = Incoming - Outgoing (how much it receives vs sends)
         """)
 
     for universe_name in UNIVERSE_ORDER:
@@ -217,8 +210,7 @@ with tab1:
             cols = st.columns(3)
             for idx, (ticker, z_score, data) in enumerate(buy_etfs[:3]):
                 best_window = data.get("window", "N/A")
-                sharpe = safe_float(data.get("sharpe", 0))
-                n_scenarios = int(safe_float(data.get("n_scenarios", 0)))
+                net_causality = safe_float(data.get("net_causality", 0))
                 action = get_action(z_score)
 
                 with cols[idx]:
@@ -227,8 +219,7 @@ with tab1:
   <div class="ticker">⭐ {ticker}</div>
   <div class="score">z-score = {z_score:+.3f}</div>
   <div class="score">{action_badge(action)}</div>
-  <div class="score">Sharpe = {sharpe:.2f}</div>
-  <div class="score">Scenarios = {n_scenarios}</div>
+  <div class="score">Net Causality = {net_causality:.3f}</div>
   <div class="score">best window = {best_window}d</div>
   <div class="next-day">📅 {ntd}</div>
 </div>
@@ -245,8 +236,9 @@ with tab1:
                     rows.append({
                         "ETF": t,
                         "z-score": round(z, 4),
-                        "Sharpe": round(safe_float(info.get("sharpe", 0)), 3),
-                        "Scenarios": int(safe_float(info.get("n_scenarios", 0))),
+                        "Net Causality": round(safe_float(info.get("net_causality", 0)), 4),
+                        "Incoming": round(safe_float(info.get("incoming", 0)), 4),
+                        "Outgoing": round(safe_float(info.get("outgoing", 0)), 4),
                         "Best Window (d)": info.get("window", "N/A"),
                         "Action": get_action(z)
                     })
@@ -266,14 +258,14 @@ with tab1:
 
         st.divider()
 
-    st.caption(f"Run date: {data1.get('run_date','?')} · Higher z-score = better rehearsal quality")
+    st.caption(f"Run date: {data1.get('run_date','?')} · Higher z-score = stronger causal driver")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # TAB 2 - EXPLORE BY WINDOW
 # ══════════════════════════════════════════════════════════════════════════════
 with tab2:
-    st.header("🔍 Explore TDA Scenarios by Window")
+    st.header("🔍 Explore Causality by Window")
 
     if not data2:
         st.warning("Window-level data not found. Re-run trainer.")
@@ -309,14 +301,14 @@ with tab2:
 
     with st.expander("ℹ️ Window guidance", expanded=False):
         st.markdown("""
-- **63d** — Short-term regime rehearsal
-- **252d** — Annual regime rehearsal: recommended primary signal
-- **504d–1008d** — Medium-term structural regimes
-- **2016d+** — Very long-run regime rehearsal
-- **4032d / 4536d** — Full history regime rehearsal (2008–present)
+- **63d** — Short-term causality: recent information flow
+- **252d** — Annual causality: recommended primary signal
+- **504d–1008d** — Medium-term causal structure
+- **2016d+** — Very long-run causal relationships
+- **4032d / 4536d** — Full history causality (2008–present)
         """)
 
-    st.markdown(f"### TDA Scenario Rankings at **{win_labels.get(selected_win, f'{selected_win}d')}** window")
+    st.markdown(f"### Causality Rankings at **{win_labels.get(selected_win, f'{selected_win}d')}** window")
 
     for universe_name in UNIVERSE_ORDER:
         label = UNIVERSE_LABELS.get(universe_name, universe_name)
