@@ -1,8 +1,8 @@
 """
-trainer.py  —  Orchestrator for TDA-Replay Engine
-==================================================
+trainer.py  —  Orchestrator for AIC-Granger Engine
+===================================================
 
-Loads data → computes TDA scenarios → generates signals → builds JSON → uploads.
+Loads data → computes AIC-Granger causality → builds JSON → uploads.
 Uses parallel processing for speed.
 """
 
@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import config
 from data_manager import load_master_data, validate_data
-from tda_replay import compute_universe_tda
+from aic_granger import compute_universe_causality
 from push_results import upload_results
 
 logging.basicConfig(
@@ -64,7 +64,7 @@ def process_window(args: Tuple) -> Dict:
     
     try:
         universe_prices = prices_df[available]
-        result = compute_universe_tda(universe_prices, config_dict, window)
+        result = compute_universe_causality(universe_prices, config_dict, window)
         
         return {
             "window": window,
@@ -82,7 +82,7 @@ def process_window(args: Tuple) -> Dict:
 
 
 def run_trainer(hf_token: Optional[str] = None) -> Dict:
-    """Run the full TDA-Replay pipeline."""
+    """Run the full AIC-Granger pipeline."""
     token = hf_token or config.HF_TOKEN or os.environ.get("HF_TOKEN")
     if not token:
         logger.warning("HF_TOKEN not set — will skip HuggingFace upload.")
@@ -99,14 +99,11 @@ def run_trainer(hf_token: Optional[str] = None) -> Dict:
 
     run_date = datetime.now().strftime("%Y-%m-%d")
 
-    # ── Configuration ──────────────────────────────────────────────────────────
     engine_config = {
-        "tda": config.TDA,
-        "diffusion": config.DIFFUSION,
-        "regime_labels": config.DIFFUSION["regime_labels"],
+        **config.COMPRESSION,
+        **config.CAUSALITY,
     }
 
-    # ── Results containers ────────────────────────────────────────────────────
     results_tab1 = {"run_date": run_date, "universes": {}}
     results_tab2 = {"run_date": run_date, "universes": {}}
 
@@ -177,10 +174,11 @@ def run_trainer(hf_token: Optional[str] = None) -> Dict:
                 best_window_per_etf[ticker] = {
                     "z_score": best_z,
                     "window": int(best_win),
-                    "sharpe": safe_float(best_data.get("aggregate_sharpe", 0)),
-                    "mean_return": safe_float(best_data.get("aggregate_mean", 0)),
-                    "n_scenarios": safe_float(best_data.get("n_scenarios", 0)),
-                    "n_regimes": safe_float(best_data.get("n_regimes", 0)),
+                    "net_causality": safe_float(best_data.get("net_causality", 0)),
+                    "incoming": safe_float(best_data.get("incoming_causality", 0)),
+                    "outgoing": safe_float(best_data.get("outgoing_causality", 0)),
+                    "n_incoming": int(safe_float(best_data.get("n_incoming", 0))),
+                    "n_outgoing": int(safe_float(best_data.get("n_outgoing", 0))),
                     "action": get_action(best_z)
                 }
 
@@ -232,8 +230,8 @@ def run_trainer(hf_token: Optional[str] = None) -> Dict:
 
     # ── Save JSON ─────────────────────────────────────────────────────────────
     logger.info("\n💾 Saving JSON results...")
-    tab1_path = f"tda_replay_{run_date}.json"
-    tab2_path = f"tda_replay_breakdown_{run_date}.json"
+    tab1_path = f"aic_granger_{run_date}.json"
+    tab2_path = f"aic_granger_breakdown_{run_date}.json"
 
     with open(tab1_path, "w") as f:
         json.dump(results_tab1, f, indent=2, default=str)
