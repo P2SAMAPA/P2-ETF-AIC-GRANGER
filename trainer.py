@@ -43,6 +43,19 @@ def safe_float(val, default=0.0):
         return default
 
 
+def get_action(z_score: float) -> str:
+    if z_score > 1.0:
+        return "STRONG BUY"
+    elif z_score > 0.5:
+        return "BUY"
+    elif z_score > -0.5:
+        return "HOLD"
+    elif z_score > -1.0:
+        return "REDUCE"
+    else:
+        return "STRONG SELL"
+
+
 def process_window(args: Tuple) -> Dict:
     """Process a single window for a universe in parallel."""
     window, universe_name, available, prices_df, config_dict = args
@@ -66,20 +79,6 @@ def process_window(args: Tuple) -> Dict:
             "results": {},
             "error": str(e)
         }
-
-
-def get_action(z_score: float) -> str:
-    """Consistent action logic."""
-    if z_score > 1.0:
-        return "STRONG BUY"
-    elif z_score > 0.5:
-        return "BUY"
-    elif z_score > -0.5:
-        return "HOLD"
-    elif z_score > -1.0:
-        return "REDUCE"
-    else:
-        return "STRONG SELL"
 
 
 def run_trainer(hf_token: Optional[str] = None) -> Dict:
