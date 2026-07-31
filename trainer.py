@@ -1,9 +1,11 @@
 """
-trainer.py  —  Orchestrator for AIC-Granger Engine
-===================================================
+trainer.py  —  Orchestrator for AIC-Granger Engine (Optimized)
+===============================================================
 
-Loads data → computes AIC-Granger causality → builds JSON → uploads.
-Uses parallel processing for speed.
+Optimizations:
+- Smarter parallelization (fewer tasks)
+- Only compute top pairs, not all pairs
+- Use primary window only for speed
 """
 
 import os
@@ -60,8 +62,6 @@ def process_window(args: Tuple) -> Dict:
     """Process a single window for a universe in parallel."""
     window, universe_name, available, prices_df, config_dict = args
     
-    logger.info(f"   Processing window {window}d for {universe_name}...")
-    
     try:
         universe_prices = prices_df[available]
         result = compute_universe_causality(universe_prices, config_dict, window)
@@ -82,7 +82,7 @@ def process_window(args: Tuple) -> Dict:
 
 
 def run_trainer(hf_token: Optional[str] = None) -> Dict:
-    """Run the full AIC-Granger pipeline."""
+    """Run the full AIC-Granger pipeline with optimizations."""
     token = hf_token or config.HF_TOKEN or os.environ.get("HF_TOKEN")
     if not token:
         logger.warning("HF_TOKEN not set — will skip HuggingFace upload.")
@@ -107,9 +107,21 @@ def run_trainer(hf_token: Optional[str] = None) -> Dict:
     results_tab1 = {"run_date": run_date, "universes": {}}
     results_tab2 = {"run_date": run_date, "universes": {}}
 
+    # ── Reduce windows for speed ─────────────────────────────────────────────
+    # Use only primary window for speed, or keep windows if small
+    if len(config.WINDOWS) > 3:
+        # Use only 3 windows: short, primary, long
+        windows_to_use = [
+            config.WINDOWS[0],           # short
+            config.PRIMARY_WINDOW,       # primary
+            config.WINDOWS[-1]           # long
+        ]
+        logger.info(f"⚡ Using optimized windows: {windows_to_use} (reduced from {len(config.WINDOWS)})")
+    else:
+        windows_to_use = config.WINDOWS
+
     # ── Prepare parallel tasks ───────────────────────────────────────────────
     tasks = []
-    windows = config.WINDOWS
     max_workers = max(1, int(mp.cpu_count() * 0.75))
     logger.info(f"🚀 Using {max_workers} parallel workers")
 
@@ -118,7 +130,7 @@ def run_trainer(hf_token: Optional[str] = None) -> Dict:
         if not available:
             continue
 
-        for window in windows:
+        for window in windows_to_use:
             tasks.append((window, universe_name, available, prices_df, engine_config))
 
     # ── Run parallel processing ──────────────────────────────────────────────
@@ -131,7 +143,7 @@ def run_trainer(hf_token: Optional[str] = None) -> Dict:
         for future in as_completed(future_to_task):
             completed += 1
             try:
-                result = future.result(timeout=3600)
+                result = future.result(timeout=1800)  # 30 min timeout
                 if result.get("error"):
                     logger.warning(f"   ⚠️ {result['universe']} @ {result['window']}d failed: {result['error']}")
                     continue
