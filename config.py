@@ -1,19 +1,19 @@
 """
-config.py  —  Configuration for TDA-Replay Engine
-==================================================
+config.py  —  Configuration for AIC-Granger Engine
+===================================================
 
 Defines:
   - UNIVERSES: ETF ticker sets
-  - TDA: Topological data analysis parameters
-  - DIFFUSION: Topo-Score-Diffusion model parameters
-  - WINDOWS: Time windows for regime detection
+  - COMPRESSION: Lempel-Ziv compression parameters
+  - WINDOWS: Time windows for causality testing
+  - CAUSALITY: Thresholds and parameters
 """
 
 # ── HuggingFace ──────────────────────────────────────────────────────────────
 
 HF_TOKEN = ""
 DATA_REPO = "P2SAMAPA/fi-etf-macro-signal-master-data"
-RESULTS_REPO = "P2SAMAPA/p2-tda-replay-results"
+RESULTS_REPO = "P2SAMAPA/p2-aic-granger-results"
 
 
 # ── ETF Universes ────────────────────────────────────────────────────────────
@@ -51,31 +51,25 @@ WINDOW_LABELS = {
 PRIMARY_WINDOW = 252
 
 
-# ── TDA Parameters ──────────────────────────────────────────────────────────
+# ── Compression Parameters ──────────────────────────────────────────────────
 
-TDA = {
-    "max_dimension": 2,          # 0=components, 1=loops, 2=voids
-    "persistence_threshold": 0.1, # Minimum persistence to keep
-    "n_landmarks": 100,          # For landmark sampling (speed)
-    "distance_metric": "euclidean", # or "manhattan", "chebyshev"
+COMPRESSION = {
+    "method": "lz77",           # lz77, lzma, zlib
+    "normalize": True,          # Use NCD (Normalized Compression Distance)
+    "compress_ratio": 1.0,      # Scaling factor for compression
+    "window_size": 256,         # LZ77 window size
+    "lookahead_size": 32,       # LZ77 lookahead buffer
 }
 
 
-# ── Diffusion Model Parameters ──────────────────────────────────────────────
+# ── Causality Parameters ────────────────────────────────────────────────────
 
-DIFFUSION = {
-    "n_steps": 100,              # Diffusion steps
-    "n_samples": 50,             # Samples per scenario
-    "scenario_count": 5,         # Number of scenarios to generate
-    "noise_scale": 0.1,          # Noise scale for diffusion
-    "regime_labels": [           # Predefined regime types
-        "LIQUIDITY_CRUNCH",
-        "BULL_MARKET",
-        "BEAR_MARKET",
-        "HIGH_VOLATILITY",
-        "LOW_VOLATILITY",
-        "CREDIT_CRISIS",
-    ]
+CAUSALITY = {
+    "lag": 5,                   # Lag for causality testing
+    "threshold": 0.1,           # NCD threshold for significance
+    "min_samples": 50,          # Minimum samples for reliable compression
+    "shuffle_permutations": 100, # Permutations for significance testing
+    "significance_level": 0.05, # p-value threshold
 }
 
 
